@@ -1,0 +1,154 @@
+{
+  "design_system": {
+    "identity": {
+      "name": "Nexus Drive",
+      "tone": "Professional, Invisible, Secure, Efficient",
+      "aesthetic": "Swiss Minimalist Enterprise",
+      "theme_mode": "light"
+    },
+    "typography": {
+      "font_family": {
+        "headings": "Manrope, sans-serif",
+        "body": "Inter, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": "text-4xl font-bold tracking-tight text-slate-900",
+        "h2": "text-3xl font-semibold tracking-tight text-slate-900",
+        "h3": "text-2xl font-semibold tracking-tight text-slate-900",
+        "body_lg": "text-lg text-slate-600 leading-relaxed",
+        "body_base": "text-base text-slate-600 leading-relaxed",
+        "caption": "text-sm text-slate-500 font-medium",
+        "label": "text-xs font-semibold uppercase tracking-wider text-slate-500"
+      },
+      "installation": "Import fonts via Google Fonts in index.html: <link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'>"
+    },
+    "colors": {
+      "palette": {
+        "primary": {
+          "DEFAULT": "#4f46e5",
+          "foreground": "#ffffff",
+          "hover": "#4338ca",
+          "light": "#e0e7ff"
+        },
+        "secondary": {
+          "DEFAULT": "#f1f5f9",
+          "foreground": "#0f172a",
+          "hover": "#e2e8f0"
+        },
+        "background": {
+          "DEFAULT": "#ffffff",
+          "subtle": "#f8fafc",
+          "surface": "#ffffff"
+        },
+        "border": {
+          "DEFAULT": "#e2e8f0",
+          "subtle": "#f1f5f9",
+          "strong": "#cbd5e1"
+        },
+        "text": {
+          "primary": "#0f172a",
+          "secondary": "#64748b",
+          "muted": "#94a3b8"
+        },
+        "status": {
+          "success": "#10b981",
+          "warning": "#f59e0b",
+          "error": "#ef4444",
+          "info": "#3b82f6"
+        }
+      },
+      "usage_rules": {
+        "gradients": "Do NOT use gradients for backgrounds. Use solid colors. Subtle gradients allowed on active states only.",
+        "shadows": "Use 'shadow-sm' for cards, 'shadow-lg' for dropdowns/modals. Avoid heavy shadows."
+      }
+    },
+    "layout": {
+      "spacing_scale": {
+        "container_padding": "p-8 md:p-12",
+        "section_gap": "gap-8",
+        "item_gap": "gap-4"
+      },
+      "grid_systems": {
+        "file_grid": "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6",
+        "dashboard_grid": "grid grid-cols-1 md:grid-cols-12 gap-8"
+      },
+      "structure": {
+        "sidebar_width": "w-64",
+        "header_height": "h-16",
+        "max_width": "max-w-7xl mx-auto"
+      }
+    },
+    "components": {
+      "buttons": {
+        "default": "rounded-lg font-medium transition-all duration-200 active:scale-95",
+        "primary": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md",
+        "ghost": "hover:bg-slate-100 text-slate-700 hover:text-slate-900"
+      },
+      "cards": {
+        "base": "bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-300",
+        "file_card": "group relative flex flex-col items-center justify-center p-6 aspect-square bg-white border border-slate-100 hover:border-indigo-200 rounded-xl transition-all cursor-pointer hover:bg-slate-50"
+      },
+      "inputs": {
+        "default": "h-10 rounded-lg border-slate-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-white"
+      },
+      "modals": {
+        "overlay": "bg-slate-900/20 backdrop-blur-sm",
+        "content": "bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 sm:max-w-lg"
+      }
+    },
+    "visual_enhancers": {
+      "glassmorphism": "bg-white/80 backdrop-blur-md border-b border-white/20",
+      "borders": "border border-slate-200",
+      "rounded": "rounded-lg"
+    },
+    "motion": {
+      "library": "framer-motion",
+      "transitions": {
+        "default": "transition-all duration-200 ease-in-out",
+        "page_enter": {
+          "initial": { "opacity": 0, "y": 10 },
+          "animate": { "opacity": 1, "y": 0 },
+          "exit": { "opacity": 0, "y": -10 },
+          "transition": { "duration": 0.3 }
+        },
+        "list_item": {
+          "initial": { "opacity": 0, "x": -10 },
+          "animate": { "opacity": 1, "x": 0 }
+        }
+      }
+    },
+    "assets": {
+      "icons": {
+        "library": "lucide-react",
+        "style": "stroke-width={1.5} size={20}"
+      },
+      "images": {
+        "avatars": [
+          "https://images.unsplash.com/photo-1576558656222-ba66febe3dec?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "https://images.unsplash.com/photo-1562228802-4b1052d0f845?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "https://images.pexels.com/photos/30004317/pexels-photo-30004317.jpeg?auto=compress&cs=tinysrgb&h=130",
+          "https://images.pexels.com/photos/30004323/pexels-photo-30004323.jpeg?auto=compress&cs=tinysrgb&h=130"
+        ],
+        "placeholders": [
+           "https://images.unsplash.com/photo-1637775297509-19767f6fc225?crop=entropy&cs=srgb&fm=jpg&q=85",
+           "https://images.unsplash.com/photo-1649182784901-48f5f2d40ecc?crop=entropy&cs=srgb&fm=jpg&q=85"
+        ]
+      }
+    },
+     "universal_guidelines": {
+      "instructions_to_main_agent": [
+        "1. Theme: FORCE LIGHT MODE. Do not implement dark mode toggles unless specifically requested in the future. The enterprise vibe requires clean white/slate.",
+        "2. Sidebar: Create a collapsible sidebar. Navigation links should have active states (bg-indigo-50 text-indigo-700 font-medium).",
+        "3. Breadcrumbs: MUST implementation dynamic breadcrumbs for folder navigation.",
+        "4. Context Menu: Implement a custom right-click context menu for files (Open, Share, Rename, Delete).",
+        "5. Drag & Drop: Use 'react-dropzone' for the upload area, visual feedback on drag enter is critical (border-indigo-500 border-dashed bg-indigo-50).",
+        "6. Tables: Use shadcn 'Table' component for the list view. Add hover states to rows.",
+        "7. Testing: Add 'data-testid' to every interactive element. E.g., 'file-item-123', 'upload-button', 'folder-row'.",
+        "8. Empty States: Never leave a list empty. Show a friendly illustration and a 'Create New' button.",
+        "9. Auth Page: Clean, centered card. No complex background. Just a subtle mesh or simple gradient.",
+        "10. File Icons: Use Lucide icons with different colors for file types (PDF=Red, Doc=Blue, Image=Purple, Folder=Yellow/Amber)."
+      ]
+    }
+  }
+}
