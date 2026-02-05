@@ -1,3 +1,34 @@
+"""
+File Operations Manager
+
+FILESYSTEM BEHAVIOR FOR SHARED FILES:
+======================================
+Physical Storage:
+- All files physically stored at: /data/secure-vault/{owner_username}/...
+- Shared files remain in owner's storage (NOT copied to recipient)
+
+Path Resolution:
+- Database stores logical paths (e.g., /documents/report.pdf)
+- Operations resolve to owner's physical path
+- Recipients access via same logical path
+
+Example:
+--------
+Owner: alice, File: /reports/Q4.pdf
+Physical: /data/secure-vault/alice/reports/Q4.pdf
+
+Shared with Bob (READ permission):
+- Bob sees file in listing: GET /api/files?path=/reports
+- Bob downloads: GET /api/files/download?path=/reports/Q4.pdf
+- System resolves to alice's physical storage
+- No files in /data/secure-vault/bob/reports/
+
+Permission Enforcement:
+- FileManager checks ACL via PermissionManager
+- Operations use owner's physical path
+- Recipients never access files they don't have permission for
+"""
+
 import os
 import shutil
 import aiofiles
