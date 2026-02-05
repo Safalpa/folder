@@ -35,7 +35,8 @@ const FileExplorerPage = () => {
     setLoading(true);
     try {
       const response = await api.get(`/files?path=${encodeURIComponent(path)}`);
-      setFiles(response.data.files);
+      // Backend returns array directly, not {files}
+      setFiles(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       toast.error('Failed to load files');
     } finally {
