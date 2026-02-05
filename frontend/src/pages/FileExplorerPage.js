@@ -138,9 +138,11 @@ const FileExplorerPage = () => {
     }
 
     try {
-      await api.put('/files/rename', {
-        source_path: selectedFile.file_path,
-        new_name: newFileName,
+      await api.put('/files/rename', null, {
+        params: {
+          old_path: selectedFile.path,
+          new_name: newFileName,
+        }
       });
 
       toast.success('Renamed successfully');
