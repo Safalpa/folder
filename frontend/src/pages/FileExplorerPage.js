@@ -12,8 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const FileExplorerPage = () => {
+  const { user } = useAuth();
   const [files, setFiles] = useState([]);
   const [currentPath, setCurrentPath] = useState('/');
   const [loading, setLoading] = useState(false);
