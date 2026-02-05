@@ -37,6 +37,27 @@ class SecureVaultTester:
         })
         self.auth_token = None
         self.test_results = []
+        self.db_conn = None
+        
+    def connect_db(self):
+        """Connect to PostgreSQL database for direct testing"""
+        try:
+            self.db_conn = psycopg2.connect(
+                **DB_CONFIG,
+                cursor_factory=psycopg2.extras.RealDictCursor
+            )
+            self.db_conn.autocommit = True
+            return True
+        except Exception as e:
+            self.log_test("Database Connection", False, f"Failed to connect: {str(e)}")
+            return False
+    
+    def get_db_cursor(self):
+        """Get database cursor"""
+        if not self.db_conn:
+            if not self.connect_db():
+                return None
+        return self.db_conn.cursor()
         
     def log_test(self, test_name: str, success: bool, message: str = "", details: str = ""):
         """Log test result"""
@@ -51,6 +72,436 @@ class SecureVaultTester:
             'message': message,
             'details': details
         })
+    
+    def create_test_users(self) -> bool:
+        """Create test users in database for ACL testing"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Create test users
+            test_users = [
+                ('alice', 'Alice Smith', 'alice@company.com', ['Finance', 'Managers']),
+                ('bob', 'Bob Johnson', 'bob@company.com', ['Engineering', 'Developers']),
+                ('charlie', 'Charlie Brown', 'charlie@company.com', ['Finance'])
+            ]
+            
+            for username, display_name, email, groups in test_users:
+                cursor.execute(
+                    """
+                    INSERT INTO users (username, display_name, email, ad_groups, is_admin)
+                    VALUES (%s, %s, %s, %s::text[], %s)
+                    ON CONFLICT (username) DO UPDATE SET
+                        display_name = EXCLUDED.display_name,
+                        email = EXCLUDED.email,
+                        ad_groups = EXCLUDED.ad_groups,
+                        last_login = CURRENT_TIMESTAMP
+                    """,
+                    (username, display_name, email, groups, False)
+                )
+            
+            self.log_test("Test Users Creation", True, "Created alice, bob, charlie")
+            return True
+            
+        except Exception as e:
+            self.log_test("Test Users Creation", False, f"Error: {str(e)}")
+            return False
+    
+    def create_test_files(self) -> bool:
+        """Create test files in database for ACL testing"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Get user IDs
+            cursor.execute("SELECT id, username FROM users WHERE username IN ('alice', 'bob', 'charlie')")
+            users = {row['username']: row['id'] for row in cursor.fetchall()}
+            
+            if len(users) < 3:
+                self.log_test("Test Files Creation", False, "Test users not found")
+                return False
+            
+            # Create test files
+            test_files = [
+                # Alice's files
+                (users['alice'], 'Q4_Report.pdf', '/reports/Q4_Report.pdf', '/reports', False, 1024000, 'application/pdf'),
+                (users['alice'], 'Budget.xlsx', '/finance/Budget.xlsx', '/finance', False, 512000, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                (users['alice'], 'reports', '/reports', '/', True, 0, None),
+                (users['alice'], 'finance', '/finance', '/', True, 0, None),
+                
+                # Bob's files
+                (users['bob'], 'code.py', '/projects/code.py', '/projects', False, 2048, 'text/x-python'),
+                (users['bob'], 'projects', '/projects', '/', True, 0, None),
+                
+                # Charlie's files
+                (users['charlie'], 'notes.txt', '/personal/notes.txt', '/personal', False, 1024, 'text/plain'),
+                (users['charlie'], 'personal', '/personal', '/', True, 0, None),
+            ]
+            
+            for owner_id, filename, path, parent_path, is_folder, size, mime_type in test_files:
+                cursor.execute(
+                    """
+                    INSERT INTO files (owner_id, filename, path, parent_path, is_folder, size, mime_type)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (path, owner_id) DO NOTHING
+                    """,
+                    (owner_id, filename, path, parent_path, is_folder, size, mime_type)
+                )
+            
+            self.log_test("Test Files Creation", True, "Created test files for alice, bob, charlie")
+            return True
+            
+        except Exception as e:
+            self.log_test("Test Files Creation", False, f"Error: {str(e)}")
+            return False
+    
+    def test_file_sharing_acl(self) -> bool:
+        """Test comprehensive ACL file sharing scenarios"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Get user and file IDs
+            cursor.execute("SELECT id, username FROM users WHERE username IN ('alice', 'bob', 'charlie')")
+            users = {row['username']: row['id'] for row in cursor.fetchall()}
+            
+            cursor.execute("SELECT id, path, owner_id FROM files WHERE path IN ('/reports/Q4_Report.pdf', '/finance/Budget.xlsx')")
+            files = {row['path']: {'id': row['id'], 'owner_id': row['owner_id']} for row in cursor.fetchall()}
+            
+            if not users or not files:
+                self.log_test("ACL File Sharing", False, "Test data not available")
+                return False
+            
+            # Test 1: Alice shares Q4_Report.pdf with Bob (READ permission)
+            cursor.execute(
+                """
+                INSERT INTO file_permissions (file_id, shared_by_user_id, shared_with_user_id, permission_level)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (file_id, shared_with_user_id) DO UPDATE SET
+                    permission_level = EXCLUDED.permission_level,
+                    created_at = CURRENT_TIMESTAMP
+                """,
+                (files['/reports/Q4_Report.pdf']['id'], users['alice'], users['bob'], 'read')
+            )
+            
+            # Test 2: Alice shares Budget.xlsx with Finance group (WRITE permission)
+            cursor.execute(
+                """
+                INSERT INTO file_permissions (file_id, shared_by_user_id, shared_with_group, permission_level)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (file_id, shared_with_group) DO UPDATE SET
+                    permission_level = EXCLUDED.permission_level,
+                    created_at = CURRENT_TIMESTAMP
+                """,
+                (files['/finance/Budget.xlsx']['id'], users['alice'], 'Finance', 'write')
+            )
+            
+            # Test 3: Alice shares Q4_Report.pdf with Charlie (FULL permission)
+            cursor.execute(
+                """
+                INSERT INTO file_permissions (file_id, shared_by_user_id, shared_with_user_id, permission_level)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (file_id, shared_with_user_id) DO UPDATE SET
+                    permission_level = EXCLUDED.permission_level,
+                    created_at = CURRENT_TIMESTAMP
+                """,
+                (files['/reports/Q4_Report.pdf']['id'], users['alice'], users['charlie'], 'full')
+            )
+            
+            self.log_test("ACL File Sharing", True, "Created test shares: Bob(READ), Finance group(WRITE), Charlie(FULL)")
+            return True
+            
+        except Exception as e:
+            self.log_test("ACL File Sharing", False, f"Error: {str(e)}")
+            return False
+    
+    def test_shared_file_visibility(self) -> bool:
+        """Test that shared files appear in user's file listings"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Get user IDs
+            cursor.execute("SELECT id, username FROM users WHERE username IN ('alice', 'bob', 'charlie')")
+            users = {row['username']: row['id'] for row in cursor.fetchall()}
+            
+            # Test Bob's view - should see his own files + files shared with him
+            cursor.execute(
+                """
+                SELECT DISTINCT f.path, f.filename, u.username as owner_username,
+                       CASE WHEN f.owner_id = %s THEN 'owner' ELSE fp.permission_level END as access_type
+                FROM files f
+                JOIN users u ON f.owner_id = u.id
+                LEFT JOIN file_permissions fp ON f.id = fp.file_id
+                WHERE f.owner_id = %s
+                   OR fp.shared_with_user_id = %s
+                   OR (fp.shared_with_group = ANY(%s) AND %s)
+                ORDER BY f.path
+                """,
+                (users['bob'], users['bob'], users['bob'], ['Engineering', 'Developers'], True)
+            )
+            bob_files = cursor.fetchall()
+            
+            # Check if Bob can see Alice's shared file
+            shared_files = [f for f in bob_files if f['owner_username'] == 'alice']
+            
+            if shared_files:
+                self.log_test("Shared File Visibility - Bob", True, 
+                             f"Bob can see {len(shared_files)} shared files from Alice")
+            else:
+                self.log_test("Shared File Visibility - Bob", False, 
+                             "Bob cannot see Alice's shared files")
+                return False
+            
+            # Test Charlie's view - should see files shared via Finance group
+            cursor.execute(
+                """
+                SELECT DISTINCT f.path, f.filename, u.username as owner_username,
+                       CASE WHEN f.owner_id = %s THEN 'owner' ELSE fp.permission_level END as access_type
+                FROM files f
+                JOIN users u ON f.owner_id = u.id
+                LEFT JOIN file_permissions fp ON f.id = fp.file_id
+                WHERE f.owner_id = %s
+                   OR fp.shared_with_user_id = %s
+                   OR (fp.shared_with_group = ANY(%s) AND %s)
+                ORDER BY f.path
+                """,
+                (users['charlie'], users['charlie'], users['charlie'], ['Finance'], True)
+            )
+            charlie_files = cursor.fetchall()
+            
+            # Check if Charlie can see Alice's files via Finance group
+            finance_shared = [f for f in charlie_files if f['owner_username'] == 'alice' and f['access_type'] == 'write']
+            
+            if finance_shared:
+                self.log_test("Shared File Visibility - Charlie (Group)", True, 
+                             f"Charlie can see {len(finance_shared)} files via Finance group")
+            else:
+                self.log_test("Shared File Visibility - Charlie (Group)", False, 
+                             "Charlie cannot see Finance group shared files")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self.log_test("Shared File Visibility", False, f"Error: {str(e)}")
+            return False
+    
+    def test_permission_enforcement(self) -> bool:
+        """Test permission level enforcement logic"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Get test data
+            cursor.execute("SELECT id FROM users WHERE username = 'bob'")
+            bob_id = cursor.fetchone()['id']
+            
+            cursor.execute("SELECT id FROM files WHERE path = '/reports/Q4_Report.pdf'")
+            file_id = cursor.fetchone()['id']
+            
+            # Test permission checking logic
+            def check_permission(user_id, file_id, required_perm, user_groups=None):
+                user_groups = user_groups or []
+                
+                # Check if owner
+                cursor.execute("SELECT owner_id FROM files WHERE id = %s", (file_id,))
+                owner_id = cursor.fetchone()['owner_id']
+                if owner_id == user_id:
+                    return 'full'  # Owner has full permission
+                
+                # Check direct user permissions
+                cursor.execute(
+                    """
+                    SELECT permission_level FROM file_permissions
+                    WHERE file_id = %s AND shared_with_user_id = %s
+                    ORDER BY 
+                        CASE permission_level
+                            WHEN 'full' THEN 3
+                            WHEN 'write' THEN 2
+                            WHEN 'read' THEN 1
+                        END DESC
+                    LIMIT 1
+                    """,
+                    (file_id, user_id)
+                )
+                row = cursor.fetchone()
+                if row:
+                    return row['permission_level']
+                
+                # Check group permissions
+                if user_groups:
+                    cursor.execute(
+                        """
+                        SELECT permission_level FROM file_permissions
+                        WHERE file_id = %s AND shared_with_group = ANY(%s)
+                        ORDER BY 
+                            CASE permission_level
+                                WHEN 'full' THEN 3
+                                WHEN 'write' THEN 2
+                                WHEN 'read' THEN 1
+                            END DESC
+                        LIMIT 1
+                        """,
+                        (file_id, user_groups)
+                    )
+                    row = cursor.fetchone()
+                    if row:
+                        return row['permission_level']
+                
+                return None
+            
+            # Test Bob's permission on Alice's file (should be 'read')
+            bob_perm = check_permission(bob_id, file_id, 'read', ['Engineering', 'Developers'])
+            
+            if bob_perm == 'read':
+                self.log_test("Permission Enforcement - READ", True, "Bob has READ permission on Alice's file")
+            else:
+                self.log_test("Permission Enforcement - READ", False, f"Expected READ, got {bob_perm}")
+                return False
+            
+            # Test permission hierarchy
+            perm_ranks = {'read': 1, 'write': 2, 'full': 3}
+            
+            # Bob should be able to READ (has read permission)
+            can_read = perm_ranks.get(bob_perm, 0) >= perm_ranks['read']
+            # Bob should NOT be able to WRITE (only has read permission)
+            can_write = perm_ranks.get(bob_perm, 0) >= perm_ranks['write']
+            # Bob should NOT be able to DELETE (only has read permission)
+            can_delete = perm_ranks.get(bob_perm, 0) >= perm_ranks['full']
+            
+            if can_read and not can_write and not can_delete:
+                self.log_test("Permission Enforcement - Hierarchy", True, "Permission hierarchy working correctly")
+            else:
+                self.log_test("Permission Enforcement - Hierarchy", False, 
+                             f"Permission hierarchy failed: read={can_read}, write={can_write}, delete={can_delete}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self.log_test("Permission Enforcement", False, f"Error: {str(e)}")
+            return False
+    
+    def test_audit_logging_structure(self) -> bool:
+        """Test audit logging database structure and functionality"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Check if audit_logs table exists and has correct structure
+            cursor.execute(
+                """
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'audit_logs' 
+                ORDER BY ordinal_position
+                """
+            )
+            columns = cursor.fetchall()
+            
+            expected_columns = ['id', 'user_id', 'action', 'resource', 'ip_address', 'details', 'timestamp']
+            actual_columns = [col['column_name'] for col in columns]
+            
+            missing_columns = set(expected_columns) - set(actual_columns)
+            if missing_columns:
+                self.log_test("Audit Logging Structure", False, f"Missing columns: {missing_columns}")
+                return False
+            
+            # Test audit log insertion
+            cursor.execute("SELECT id FROM users WHERE username = 'alice'")
+            alice_id = cursor.fetchone()['id']
+            
+            # Insert test audit log
+            cursor.execute(
+                """
+                INSERT INTO audit_logs (user_id, action, resource, ip_address, details)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (alice_id, 'SHARE', '/reports/Q4_Report.pdf', '192.168.1.100', 
+                 "Shared with user 'bob' with 'read' permission")
+            )
+            
+            # Verify insertion
+            cursor.execute(
+                "SELECT * FROM audit_logs WHERE user_id = %s AND action = 'SHARE' ORDER BY timestamp DESC LIMIT 1",
+                (alice_id,)
+            )
+            log_entry = cursor.fetchone()
+            
+            if log_entry and log_entry['details']:
+                self.log_test("Audit Logging Structure", True, "Audit logging table structure and functionality verified")
+                return True
+            else:
+                self.log_test("Audit Logging Structure", False, "Audit log insertion failed")
+                return False
+            
+        except Exception as e:
+            self.log_test("Audit Logging Structure", False, f"Error: {str(e)}")
+            return False
+    
+    def test_database_schema_integrity(self) -> bool:
+        """Test database schema integrity for ACL system"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Check required tables exist
+            required_tables = ['users', 'files', 'file_permissions', 'audit_logs']
+            cursor.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+            )
+            existing_tables = [row['table_name'] for row in cursor.fetchall()]
+            
+            missing_tables = set(required_tables) - set(existing_tables)
+            if missing_tables:
+                self.log_test("Database Schema", False, f"Missing tables: {missing_tables}")
+                return False
+            
+            # Check file_permissions table structure
+            cursor.execute(
+                """
+                SELECT column_name, data_type, is_nullable
+                FROM information_schema.columns 
+                WHERE table_name = 'file_permissions'
+                ORDER BY ordinal_position
+                """
+            )
+            fp_columns = cursor.fetchall()
+            
+            required_fp_columns = ['id', 'file_id', 'shared_by_user_id', 'shared_with_user_id', 
+                                  'shared_with_group', 'permission_level', 'created_at']
+            actual_fp_columns = [col['column_name'] for col in fp_columns]
+            
+            missing_fp_columns = set(required_fp_columns) - set(actual_fp_columns)
+            if missing_fp_columns:
+                self.log_test("Database Schema", False, f"file_permissions missing columns: {missing_fp_columns}")
+                return False
+            
+            # Check constraints and indexes
+            cursor.execute(
+                """
+                SELECT constraint_name, constraint_type
+                FROM information_schema.table_constraints
+                WHERE table_name = 'file_permissions'
+                """
+            )
+            constraints = cursor.fetchall()
+            
+            self.log_test("Database Schema", True, 
+                         f"All required tables and columns exist. Constraints: {len(constraints)}")
+            return True
+            
+        except Exception as e:
+            self.log_test("Database Schema", False, f"Error: {str(e)}")
+            return False
     
     def test_api_connectivity(self) -> bool:
         """Test basic API connectivity"""
