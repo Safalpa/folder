@@ -390,19 +390,31 @@ class FileManager:
     ) -> Dict:
         source_path = self._normalize_path(source_path)
         dest_parent = self._normalize_path(dest_parent)
+        user_groups = user_groups or []
 
-        # Check permission on source file (READ is enough for copy)
+        # Get file info - try owned first, then any file
         file_info = self._get_file_id_and_owner(source_path, username)
+        if not file_info:
+            # Not owned, check if it's a shared file
+            file_info = self._get_file_by_path_any_owner(source_path)
+        
         if file_info:
+            # Check permission (need READ to copy)
             self._check_permission(
                 file_id=file_info['id'],
                 user_id=user_id,
                 required_permission=PermissionLevel.READ,
                 user_groups=user_groups
             )
+            
+            # Get actual owner's username for source file operations
+            owner_username = file_info['owner_username']
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
         
-        src_abs = self._get_absolute_path(username, source_path)
+        src_abs = self._get_absolute_path(owner_username, source_path)
         dest_path = f"{dest_parent}/{src_abs.name}"
+        # Destination goes to current user's space
         dest_abs = self._get_absolute_path(username, dest_path)
 
         if src_abs.is_dir():
@@ -417,6 +429,7 @@ class FileManager:
             is_folder = False
 
         with postgres.get_cursor() as cursor:
+            # New copy belongs to current user
             cursor.execute(
                 """
                 INSERT INTO files
