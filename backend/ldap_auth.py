@@ -1,172 +1,176 @@
 import ssl
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from ldap3 import Server, Connection, Tls, ALL
 from ldap3.core.exceptions import LDAPException, LDAPBindError, LDAPSocketOpenError
 from config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class LDAPAuthManager:
     """Manages LDAPS authentication with Active Directory"""
-    
+
     def __init__(self):
         self.server = self._initialize_server()
-    
+
+    # ──────────────────────────────
+    # Server / TLS setup
+    # ──────────────────────────────
     def _initialize_server(self) -> Server:
-        """Initialize LDAPS server configuration"""
         try:
             tls_config = Tls(
                 validate=ssl.CERT_REQUIRED if settings.ldaps_validate_cert else ssl.CERT_NONE,
                 version=ssl.PROTOCOL_TLS,
-                ca_certs_file=settings.ldaps_ca_cert_path if settings.ldaps_validate_cert else None
+                ca_certs_file=settings.ldaps_ca_cert_path if settings.ldaps_validate_cert else None,
             )
-            
+
             server = Server(
                 host=settings.ldaps_server,
                 port=settings.ldaps_port,
                 use_ssl=True,
                 tls=tls_config,
                 get_info=ALL,
-                connect_timeout=10
+                connect_timeout=10,
             )
-            
-            logger.info(f"LDAPS server configured: {settings.ldaps_server}:{settings.ldaps_port}")
+
+            logger.info(
+                f"LDAPS server configured: {settings.ldaps_server}:{settings.ldaps_port}"
+            )
             return server
+
         except Exception as e:
             logger.error(f"Failed to configure LDAPS server: {e}")
             raise
-    
+
+    # ──────────────────────────────
+    # Service bind (search)
+    # ──────────────────────────────
     def _get_connection(self) -> Connection:
-        """Establish connection to LDAPS server"""
         try:
-            connection = Connection(
+            return Connection(
                 server=self.server,
                 user=settings.ldap_bind_dn,
                 password=settings.ldap_bind_password,
                 auto_bind=True,
-                raise_exceptions=True
+                raise_exceptions=True,
             )
-            return connection
         except LDAPBindError as e:
-            logger.error(f"LDAP bind failed: {e}")
-            raise LDAPException(f"LDAP authentication failed: {e}")
+            raise LDAPException(f"LDAP service bind failed: {e}")
         except LDAPSocketOpenError as e:
-            logger.error(f"Cannot reach LDAPS server: {e}")
             raise LDAPException(f"Cannot connect to LDAPS server: {e}")
         except Exception as e:
-            logger.error(f"LDAP connection error: {e}")
             raise LDAPException(f"LDAP connection error: {e}")
-    
+
+    # ──────────────────────────────
+    # User search
+    # ──────────────────────────────
     def search_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
-        """Search for user in Active Directory"""
         conn = None
         try:
             conn = self._get_connection()
             search_filter = settings.user_search_filter.format(username=username)
-            
+
             conn.search(
                 search_base=settings.ldaps_base_dn,
                 search_filter=search_filter,
-                attributes=['sAMAccountName', 'displayName', 'mail', 'givenName', 'sn', 'distinguishedName', 'memberOf']
+                attributes=[
+                    "sAMAccountName",
+                    "displayName",
+                    "mail",
+                    "givenName",
+                    "sn",
+                    "distinguishedName",
+                    "memberOf",
+                ],
             )
-            
-            if conn.entries:
-                user_entry = conn.entries[0]
-                return {
-                    'dn': user_entry.entry_dn,
-                    'attributes': user_entry.entry_attributes_as_dict
-                }
-            return None
-        except LDAPException:
-            raise
-        finally:
-            if conn:
-                conn.unbind()
-    
-    def authenticate_user(self, username: str, password: str) -> bool:
-        """Authenticate user against Active Directory"""
-        try:
-            user_data = self.search_user_by_username(username)
-            if not user_data:
-                logger.warning(f"User not found: {username}")
-                return False
-            
-            user_dn = user_data['dn']
-            
-            try:
-                user_connection = Connection(
-                    server=self.server,
-                    user=user_dn,
-                    password=password,
-                    auto_bind=True,
-                    raise_exceptions=True
-                )
-                user_connection.unbind()
-                logger.info(f"User authenticated: {username}")
-                return True
-            except LDAPBindError:
-                logger.warning(f"Invalid credentials for: {username}")
-                return False
-        except LDAPException:
-            raise
-    
-    def get_user_groups(self, user_dn: str) -> List[Dict[str, str]]:
-        """Retrieve all groups including nested memberships"""
-        conn = None
-        try:
-            conn = self._get_connection()
-            search_filter = settings.group_search_filter.format(user_dn=user_dn)
-            
-            conn.search(
-                search_base=settings.ldaps_base_dn,
-                search_filter=search_filter,
-                attributes=['cn', 'distinguishedName', 'name']
-            )
-            
-            groups = []
-            for entry in conn.entries:
-                group_info = {
-                    'cn': entry.cn.value if hasattr(entry, 'cn') else None,
-                    'distinguishedName': entry.entry_dn,
-                    'name': entry.name.value if hasattr(entry, 'name') else None
-                }
-                groups.append(group_info)
-            
-            return groups
-        except LDAPException:
-            raise
-        finally:
-            if conn:
-                conn.unbind()
-    
-    def get_user_details(self, username: str) -> Optional[Dict[str, Any]]:
-        """Get complete user details including groups"""
-        try:
-            user_data = self.search_user_by_username(username)
-            if not user_data:
+
+            if not conn.entries:
                 return None
-            
-            user_dn = user_data['dn']
-            attributes = user_data['attributes']
-            
-            groups = self.get_user_groups(user_dn)
-            group_names = [g['cn'] for g in groups if g['cn']]
-            
-            # Check if user is admin
-            is_admin = any(admin_group in group_names for admin_group in settings.admin_groups)
-            
+
+            entry = conn.entries[0]
+
             return {
-                'username': username,
-                'distinguishedName': user_dn,
-                'displayName': attributes.get('displayName', [None])[0],
-                'email': attributes.get('mail', [None])[0],
-                'givenName': attributes.get('givenName', [None])[0],
-                'surname': attributes.get('sn', [None])[0],
-                'groups': group_names,
-                'is_admin': is_admin
+                "dn": entry.entry_dn,
+                "attributes": entry.entry_attributes_as_dict,
             }
-        except LDAPException:
-            raise
+
+        finally:
+            if conn:
+                conn.unbind()
+
+    # ──────────────────────────────
+    # Password verification
+    # ──────────────────────────────
+    def authenticate_user(self, username: str, password: str) -> bool:
+        user_data = self.search_user_by_username(username)
+        if not user_data:
+            logger.warning(f"User not found: {username}")
+            return False
+
+        user_dn = user_data["dn"]
+
+        try:
+            user_conn = Connection(
+                server=self.server,
+                user=user_dn,
+                password=password,
+                auto_bind=True,
+                raise_exceptions=True,
+            )
+            user_conn.unbind()
+            logger.info(f"User authenticated: {username}")
+            return True
+
+        except LDAPBindError:
+            logger.warning(f"Invalid credentials for: {username}")
+            return False
+
+    # ──────────────────────────────
+    # Helper: safe attribute extraction
+    # ──────────────────────────────
+    @staticmethod
+    def _safe_attr(attrs: Dict[str, Any], key: str):
+        value = attrs.get(key)
+        if isinstance(value, list) and value:
+            return value[0]
+        return None
+
+    # ──────────────────────────────
+    # Full user details (FIXED & SAFE)
+    # ──────────────────────────────
+    def get_user_details(self, username: str) -> Optional[Dict[str, Any]]:
+        user_data = self.search_user_by_username(username)
+        if not user_data:
+            return None
+
+        user_dn = user_data["dn"]
+        attrs = user_data["attributes"]
+
+        # Extract memberOf safely
+        member_of = attrs.get("memberOf", [])
+        if isinstance(member_of, str):
+            member_of = [member_of]
+
+        group_names = [
+            g.split(",")[0].replace("CN=", "") for g in member_of
+        ]
+
+        is_admin = any(
+            admin_group in group_names
+            for admin_group in settings.admin_groups
+        )
+
+        return {
+            "username": username,
+            "distinguishedName": user_dn,
+            "displayName": self._safe_attr(attrs, "displayName"),
+            "email": self._safe_attr(attrs, "mail"),
+            "givenName": self._safe_attr(attrs, "givenName"),
+            "surname": self._safe_attr(attrs, "sn"),
+            "groups": group_names,
+            "is_admin": is_admin,
+        }
+
 
 ldap_manager = LDAPAuthManager()
