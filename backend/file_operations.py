@@ -210,8 +210,26 @@ class FileManager:
             )
             return cursor.fetchone()
 
-    async def delete_file(self, path: str, user_id: int, username: str) -> bool:
+    async def delete_file(
+        self,
+        path: str,
+        user_id: int,
+        username: str,
+        user_groups: List[str] = None
+    ) -> bool:
         path = self._normalize_path(path)
+        
+        # Get file info and check permission
+        file_info = self._get_file_id_and_owner(path, username)
+        if file_info:
+            # File exists, check permission (need FULL for delete)
+            self._check_permission(
+                file_id=file_info['id'],
+                user_id=user_id,
+                required_permission=PermissionLevel.FULL,
+                user_groups=user_groups
+            )
+        
         abs_path = self._get_absolute_path(username, path)
 
         if abs_path.exists():
