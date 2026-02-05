@@ -4,10 +4,11 @@ import aiofiles
 import mimetypes
 import logging
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 from fastapi import UploadFile, HTTPException
 from config import settings
 from database import postgres
+from permissions import permission_manager, PermissionLevel
 
 logger = logging.getLogger(__name__)
 
