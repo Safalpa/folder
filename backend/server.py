@@ -66,15 +66,24 @@ def get_db_user_id(username: str) -> int:
         return row["id"]
 
 
-def log_audit(user_id: int, action: str, resource: str = None, ip: str = None):
+def log_audit(user_id: int, action: str, resource: str = None, ip: str = None, details: str = None):
+    """
+    Log audit event to database
+    
+    Actions logged:
+    - LOGIN, LOGOUT
+    - UPLOAD, DOWNLOAD
+    - CREATE_FOLDER, DELETE, RENAME, MOVE, COPY
+    - SHARE, UNSHARE
+    """
     try:
         with postgres.get_cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO audit_logs (user_id, action, resource, ip_address)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO audit_logs (user_id, action, resource, ip_address, details)
+                VALUES (%s, %s, %s, %s, %s)
                 """,
-                (user_id, action, resource, ip),
+                (user_id, action, resource, ip, details),
             )
     except Exception as e:
         logger.error(f"Audit log failed: {e}")
