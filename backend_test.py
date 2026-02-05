@@ -624,6 +624,8 @@ class SecureVaultTester:
         except Exception as e:
             self.log_test("DB Operations Without Owner Filters", False, f"Error: {str(e)}")
             return False
+    
+    def test_database_schema_integrity(self) -> bool:
         """Test database schema integrity for ACL system"""
         try:
             cursor = self.get_db_cursor()
@@ -658,6 +660,27 @@ class SecureVaultTester:
             actual_fp_columns = [col['column_name'] for col in fp_columns]
             
             missing_fp_columns = set(required_fp_columns) - set(actual_fp_columns)
+            if missing_fp_columns:
+                self.log_test("Database Schema", False, f"file_permissions missing columns: {missing_fp_columns}")
+                return False
+            
+            # Check constraints and indexes
+            cursor.execute(
+                """
+                SELECT constraint_name, constraint_type
+                FROM information_schema.table_constraints
+                WHERE table_name = 'file_permissions'
+                """
+            )
+            constraints = cursor.fetchall()
+            
+            self.log_test("Database Schema", True, 
+                         f"All required tables and columns exist. Constraints: {len(constraints)}")
+            return True
+            
+        except Exception as e:
+            self.log_test("Database Schema", False, f"Error: {str(e)}")
+            return False
             if missing_fp_columns:
                 self.log_test("Database Schema", False, f"file_permissions missing columns: {missing_fp_columns}")
                 return False
