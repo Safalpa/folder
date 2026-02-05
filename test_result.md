@@ -153,15 +153,18 @@ backend:
 
   - task: "Sharing APIs"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Added endpoints: POST /api/shares (share file), DELETE /api/shares/{id} (unshare), GET /api/shares/file (get file shares), GET /api/shares/with-me (get shared with me)"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: All sharing API endpoints implemented and accessible. POST /api/shares, DELETE /api/shares/{id}, GET /api/shares/file, GET /api/shares/with-me all respond correctly with proper authentication requirements. Endpoints properly secured and structured."
 
   - task: "File Download with Permissions"
     implemented: true
