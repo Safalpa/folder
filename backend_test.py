@@ -13,7 +13,7 @@ from typing import Dict, Optional, List
 from pathlib import Path
 
 # Configuration
-BACKEND_URL = os.getenv('REACT_APP_BACKEND_URL', 'https://audit-log-shares.preview.emergentagent.com')
+BACKEND_URL = 'http://localhost:8001'
 API_BASE = f"{BACKEND_URL}/api"
 
 class SecureVaultTester:
