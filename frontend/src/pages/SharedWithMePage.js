@@ -73,25 +73,16 @@ const SharedWithMePage = () => {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-              {sharedFiles.map((share) => (
-                <div key={share.id} className="relative">
+              {sharedFiles.map((file) => (
+                <div key={file.id} className="relative">
                   <FileCard
-                    file={{
-                      ...share,
-                      id: share.id,
-                      filename: share.filename,
-                      file_path: share.file_path,
-                      is_folder: share.is_folder,
-                      size: share.size,
-                      modified_at: share.modified_at,
-                      permission: share.permission
-                    }}
+                    file={file}
                     onClick={handleFileClick}
                     onContextMenu={() => {}}
                   />
                   <div className="absolute bottom-2 left-2 right-2">
                     <div className="bg-white/90 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-600 text-center">
-                      Shared by {share.shared_by}
+                      Shared by {file.owner_username}
                     </div>
                   </div>
                 </div>
