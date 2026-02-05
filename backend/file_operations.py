@@ -338,33 +338,45 @@ class FileManager:
     ) -> Dict:
         source_path = self._normalize_path(source_path)
         dest_parent = self._normalize_path(dest_parent)
+        user_groups = user_groups or []
 
-        # Check permission on source file
+        # Get file info - try owned first, then any file
         file_info = self._get_file_id_and_owner(source_path, username)
+        if not file_info:
+            # Not owned, check if it's a shared file
+            file_info = self._get_file_by_path_any_owner(source_path)
+        
         if file_info:
+            # Check permission (need WRITE to move)
             self._check_permission(
                 file_id=file_info['id'],
                 user_id=user_id,
                 required_permission=PermissionLevel.WRITE,
                 user_groups=user_groups
             )
+            
+            # Get actual owner's username for file operations
+            owner_username = file_info['owner_username']
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
         
-        src_abs = self._get_absolute_path(username, source_path)
+        src_abs = self._get_absolute_path(owner_username, source_path)
         dest_path = f"{dest_parent}/{src_abs.name}"
-        dest_abs = self._get_absolute_path(username, dest_path)
+        dest_abs = self._get_absolute_path(owner_username, dest_path)
 
         dest_abs.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src_abs), str(dest_abs))
 
         with postgres.get_cursor() as cursor:
+            # Update without owner_id restriction - permission already checked
             cursor.execute(
                 """
                 UPDATE files
-                SET path=%s, parent_path=%s
-                WHERE path=%s AND owner_id=%s
+                SET path=%s, parent_path=%s, modified_at=CURRENT_TIMESTAMP
+                WHERE id=%s
                 RETURNING *
                 """,
-                (dest_path, dest_parent, source_path, user_id),
+                (dest_path, dest_parent, file_info['id']),
             )
             return cursor.fetchone()
 
