@@ -21,7 +21,7 @@ const ShareDialog = ({ isOpen, onClose, file }) => {
     setLoading(true);
     try {
       await api.post('/shares', {
-        file_path: file.file_path,
+        file_path: file.path,
         shared_with_username: username,
         permission: permission,
       });
