@@ -363,7 +363,14 @@ async def share_file(
     permission: str = Body("read"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Share a file with a user or AD group"""
+    """
+    Share a file with a user or AD group
+    
+    Permission levels:
+    - read: Can view and download
+    - write: Can modify, rename, move
+    - full: Can delete and share with others
+    """
     user_id = get_db_user_id(current_user["username"])
     
     # Get file ID
@@ -380,11 +387,17 @@ async def share_file(
         permission_level=permission,
     )
     
-    # Log audit
+    # Enhanced audit logging
     target = shared_with_username or shared_with_group
-    log_audit(user_id, "SHARE", f"{file_path} with {target} ({permission})")
+    target_type = "user" if shared_with_username else "group"
+    log_audit(
+        user_id, 
+        "SHARE", 
+        file_path,
+        details=f"Shared with {target_type} '{target}' with '{permission}' permission"
+    )
     
-    return {"id": permission_id, "status": "shared"}
+    return {"id": permission_id, "status": "shared", "target": target, "permission": permission}
 
 
 @api_router.delete("/shares/{permission_id}")
@@ -395,9 +408,34 @@ async def unshare_file(
     """Remove a file share"""
     user_id = get_db_user_id(current_user["username"])
     
+    # Get share details before removing for audit
+    with postgres.get_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT f.path, fp.shared_with_user_id, fp.shared_with_group,
+                   u.username as shared_with_username, fp.permission_level
+            FROM file_permissions fp
+            JOIN files f ON fp.file_id = f.id
+            LEFT JOIN users u ON fp.shared_with_user_id = u.id
+            WHERE fp.id = %s
+            """,
+            (permission_id,)
+        )
+        share_info = cursor.fetchone()
+    
     permission_manager.unshare_file(permission_id, user_id)
     
-    log_audit(user_id, "UNSHARE", f"permission_id={permission_id}")
+    # Enhanced audit logging
+    if share_info:
+        target = share_info.get('shared_with_username') or share_info.get('shared_with_group', 'unknown')
+        log_audit(
+            user_id, 
+            "UNSHARE", 
+            share_info.get('path'),
+            details=f"Removed share with '{target}'"
+        )
+    else:
+        log_audit(user_id, "UNSHARE", None, details=f"permission_id={permission_id}")
     
     return {"status": "unshared"}
 
