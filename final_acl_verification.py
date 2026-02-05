@@ -278,9 +278,9 @@ class FinalACLVerifier:
                 cursor.execute(
                     """
                     SELECT COUNT(*) as count FROM files 
-                    WHERE owner_id = %s AND path LIKE '/reports/%'
+                    WHERE owner_id = %s AND path LIKE %s
                     """,
-                    (alice_to_bob['shared_with_user_id'],)
+                    (alice_to_bob['shared_with_user_id'], '/reports/%')
                 )
                 bob_reports = cursor.fetchone()['count']
                 
