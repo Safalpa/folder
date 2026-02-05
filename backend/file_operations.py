@@ -169,25 +169,63 @@ class FileManager:
             )
             return cursor.fetchone()
 
-    async def list_directory(self, path: str, user_id: int, username: str) -> List[Dict]:
+    async def list_directory(
+        self, 
+        path: str, 
+        user_id: int, 
+        username: str,
+        user_groups: List[str] = None
+    ) -> List[Dict]:
+        """
+        List files in directory
+        Returns both owned files AND files shared with the user
+        """
         path = self._normalize_path(path)
+        user_groups = user_groups or []
 
-        # Ensure folder exists on disk
+        # Ensure folder exists on disk (for owned files)
         abs_path = self._get_absolute_path(username, path)
         if not abs_path.exists():
             raise HTTPException(status_code=404, detail="Directory not found")
 
         with postgres.get_cursor() as cursor:
+            # Get owned files
             cursor.execute(
                 """
-                SELECT *
-                FROM files
-                WHERE parent_path = %s AND owner_id = %s
-                ORDER BY is_folder DESC, filename ASC
+                SELECT f.*, u.username as owner_username
+                FROM files f
+                JOIN users u ON f.owner_id = u.id
+                WHERE f.parent_path = %s AND f.owner_id = %s
+                ORDER BY f.is_folder DESC, f.filename ASC
                 """,
                 (path, user_id),
             )
-            return cursor.fetchall()
+            owned_files = cursor.fetchall()
+            
+            # Get shared files in this directory
+            # Files shared with user directly or via groups
+            cursor.execute(
+                """
+                SELECT DISTINCT f.*, u.username as owner_username, 
+                       fp.permission_level as shared_permission
+                FROM files f
+                JOIN users u ON f.owner_id = u.id
+                JOIN file_permissions fp ON f.id = fp.file_id
+                WHERE f.parent_path = %s
+                  AND f.owner_id != %s
+                  AND (
+                    fp.shared_with_user_id = %s
+                    OR (fp.shared_with_group = ANY(%s) AND %s)
+                  )
+                ORDER BY f.is_folder DESC, f.filename ASC
+                """,
+                (path, user_id, user_id, user_groups, len(user_groups) > 0),
+            )
+            shared_files = cursor.fetchall()
+            
+            # Combine and return
+            all_files = list(owned_files) + list(shared_files)
+            return all_files
 
     async def rename_file(
         self,
