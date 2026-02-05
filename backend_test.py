@@ -1010,6 +1010,8 @@ class SecureVaultTester:
             'File Sharing ACL': sharing_ok,
             'Shared File Visibility': visibility_ok,
             'Permission Enforcement': permissions_ok,
+            'Edge Cases & Path Resolution': edge_cases_ok,
+            'DB Operations Without Owner Filters': db_ops_ok,
             'Audit Logging': audit_ok
         }
         
