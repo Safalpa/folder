@@ -118,11 +118,9 @@ const FileExplorerPage = () => {
     }
 
     try {
-      await api.post('/files/folder', {
-        filename: newFolderName,
-        parent_path: currentPath,
-        is_folder: true,
-      });
+      // Backend uses query param ?path=
+      const folderPath = `${currentPath === '/' ? '' : currentPath}/${newFolderName}`;
+      await api.post(`/files/folder?path=${encodeURIComponent(folderPath)}`);
 
       toast.success('Folder created successfully');
       setShowNewFolderDialog(false);
