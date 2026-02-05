@@ -224,30 +224,49 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      STEP 6 (ACL System) - IMPLEMENTED:
-      ✓ Created PostgreSQL database with proper schema
-      ✓ Implemented PermissionManager class for application-layer ACL
-      ✓ Added file_permissions table supporting user and group shares
-      ✓ Three permission levels: read, write, full
-      ✓ Permission enforcement on all file operations:
-        - rename/move: requires write
-        - delete: requires full
-        - copy/download: requires read
-      ✓ Sharing APIs: share, unshare, get-shares, get-shared-with-me
-      ✓ Shared files automatically visible via get-shared-with-me endpoint
+      REFACTORED - CRITICAL FIXES APPLIED:
       
-      STEP 7 (Audit Logging) - IMPLEMENTED:
-      ✓ audit_logs table with user_id, action, resource, ip_address, details, timestamp
-      ✓ Logging all operations: LOGIN, UPLOAD, DOWNLOAD, CREATE_FOLDER, DELETE, RENAME, MOVE, COPY, SHARE, UNSHARE
+      1. ✓ Removed all owner-only restrictions from file operations
+         - File lookups now use _get_file_by_path_any_owner() for shared files
+         - DB operations use file_id instead of owner_id filtering
+         - Operations work on shared files when user has permission
       
-      READY FOR TESTING:
-      - Test file creation and basic operations
-      - Test sharing with users
-      - Test sharing with AD groups
-      - Test permission enforcement (read/write/full)
-      - Test shared-with-me functionality
-      - Test audit log entries
-      - Verify permissions are checked on all operations
+      2. ✓ Integrated PermissionManager throughout
+         - All operations check permissions via PermissionManager
+         - No direct SQL for permission checks
+         - Consistent permission enforcement
+      
+      3. ✓ Fixed file listing to show shared files
+         - list_directory() returns BOTH owned and shared files
+         - Queries file_permissions table for shared items
+         - AD group-based shares included
+         - user_groups passed from JWT
+      
+      4. ✓ AD group permissions wired everywhere
+         - user_groups extracted from JWT token
+         - Passed to ALL permission checks
+         - Group-based sharing fully functional
+      
+      5. ✓ Enhanced audit logging
+         - SHARE: includes target, permission level
+         - UNSHARE: includes target being removed
+         - Details field populated
+      
+      6. ✓ Folder permissions documented
+         - PERMISSIONS.md created
+         - NO INHERITANCE in v1 (by design)
+         - Each file/folder requires explicit share
+         - Clear rationale provided
+      
+      READY FOR COMPREHENSIVE TESTING:
+      - Share file with user → verify appears in their listing
+      - Share folder with AD group → verify all members see it
+      - Test permission levels: read, write, full
+      - Non-owner with FULL can delete
+      - Non-owner with WRITE can rename/move
+      - Non-owner with READ can download/copy only
+      - Shared files resolve to correct owner's storage
+      - Audit logs show all operations
   - agent: "testing"
     message: |
       🔒 BACKEND TESTING COMPLETE - ALL SYSTEMS WORKING ✅
