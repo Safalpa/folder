@@ -46,7 +46,7 @@ const FileExplorerPage = () => {
 
   const handleFileClick = (file) => {
     if (file.is_folder) {
-      setCurrentPath(file.file_path);
+      setCurrentPath(file.path);
     } else {
       // Preview or download
       handleDownload(file);
