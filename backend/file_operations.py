@@ -236,36 +236,49 @@ class FileManager:
         user_groups: List[str] = None
     ) -> Dict:
         old_path = self._normalize_path(old_path)
+        user_groups = user_groups or []
         
-        # Get file info and check permission
+        # Get file info - try owned first, then any file
         file_info = self._get_file_id_and_owner(old_path, username)
+        if not file_info:
+            # Not owned, check if it's a shared file
+            file_info = self._get_file_by_path_any_owner(old_path)
+        
         if file_info:
-            # File exists, check permission
+            # Check permission (need WRITE to rename)
             self._check_permission(
                 file_id=file_info['id'],
                 user_id=user_id,
                 required_permission=PermissionLevel.WRITE,
                 user_groups=user_groups
             )
+            
+            # Get actual owner's username for file operations
+            owner_username = file_info['owner_username']
+            owner_id = file_info['owner_id']
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
         
-        abs_old = self._get_absolute_path(username, old_path)
+        abs_old = self._get_absolute_path(owner_username, old_path)
 
         if not abs_old.exists():
-            raise HTTPException(status_code=404, detail="Not found")
+            raise HTTPException(status_code=404, detail="File not found on disk")
 
         parent_path = "/" if old_path.count("/") == 1 else old_path.rsplit("/", 1)[0]
         new_path = f"{parent_path}/{new_name}"
-        abs_old.rename(self._get_absolute_path(username, new_path))
+        abs_new = self._get_absolute_path(owner_username, new_path)
+        abs_old.rename(abs_new)
 
         with postgres.get_cursor() as cursor:
+            # Update without owner_id restriction - permission already checked
             cursor.execute(
                 """
                 UPDATE files
-                SET filename=%s, path=%s
-                WHERE path=%s AND owner_id=%s
+                SET filename=%s, path=%s, modified_at=CURRENT_TIMESTAMP
+                WHERE id=%s
                 RETURNING *
                 """,
-                (new_name, new_path, old_path, user_id),
+                (new_name, new_path, file_info['id']),
             )
             return cursor.fetchone()
 
