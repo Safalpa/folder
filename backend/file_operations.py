@@ -1,7 +1,7 @@
 import os
 import shutil
 import aiofiles
-import magic
+import mimetypes
 import logging
 from pathlib import Path
 from typing import List, Optional, Dict
@@ -48,10 +48,10 @@ class FileManager:
         return abs_path
     
     def get_file_type(self, file_path: Path) -> str:
-        """Detect file type using magic"""
+        """Detect file type using mimetypes"""
         try:
-            mime = magic.Magic(mime=True)
-            return mime.from_file(str(file_path))
+            mime_type, _ = mimetypes.guess_type(str(file_path))
+            return mime_type or "application/octet-stream"
         except:
             return "application/octet-stream"
     
