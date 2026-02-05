@@ -45,16 +45,18 @@ class FileOperation(BaseModel):
 
 class ShareCreate(BaseModel):
     file_path: str
-    shared_with_username: str
-    permission: str  # read, read_write, full_control
+    shared_with_username: Optional[str] = None
+    shared_with_group: Optional[str] = None
+    permission: str = "read"  # read, write, full
 
 class ShareInfo(BaseModel):
     id: int
-    file_path: str
-    filename: str
+    file_path: Optional[str] = None
+    filename: Optional[str] = None
     shared_by: str
-    shared_with: str
-    permission: str
+    shared_with_username: Optional[str] = None
+    shared_with_group: Optional[str] = None
+    permission_level: str
     created_at: datetime
 
 class AuditLog(BaseModel):
