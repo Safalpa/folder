@@ -16,7 +16,8 @@ const SharedWithMePage = () => {
     setLoading(true);
     try {
       const response = await api.get('/shares/with-me');
-      setSharedFiles(response.data.shares);
+      // Backend returns {shared_files: [...]}
+      setSharedFiles(response.data.shared_files || []);
     } catch (error) {
       toast.error('Failed to load shared files');
     } finally {
