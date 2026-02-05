@@ -49,6 +49,43 @@ class FileManager:
         mime, _ = mimetypes.guess_type(str(file_path))
         return mime or "application/octet-stream"
 
+    def _check_permission(
+        self,
+        file_id: int,
+        user_id: int,
+        required_permission: str,
+        user_groups: List[str] = None
+    ) -> bool:
+        """Check if user has required permission on file"""
+        has_permission = permission_manager.check_permission(
+            user_id=user_id,
+            file_id=file_id,
+            required_permission=required_permission,
+            user_groups=user_groups or []
+        )
+        if not has_permission:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied: {required_permission} permission required"
+            )
+        return True
+
+    def _get_file_id_and_owner(self, path: str, username: str) -> Optional[Dict]:
+        """Get file ID and owner info from database"""
+        with postgres.get_cursor() as cursor:
+            # First try to find by exact path match
+            cursor.execute(
+                """
+                SELECT f.id, f.owner_id, u.username as owner_username
+                FROM files f
+                JOIN users u ON f.owner_id = u.id
+                WHERE f.path = %s AND u.username = %s
+                """,
+                (path, username)
+            )
+            row = cursor.fetchone()
+            return row if row else None
+
     # ------------------ operations ------------------
 
     async def create_folder(self, path: str, owner_id: int, username: str) -> Dict:
