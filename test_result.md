@@ -226,49 +226,39 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      REFACTORED - CRITICAL FIXES APPLIED:
+      CRITICAL FIXES COMPLETED - READY FOR REVIEW:
       
-      1. ✓ Removed all owner-only restrictions from file operations
-         - File lookups now use _get_file_by_path_any_owner() for shared files
-         - DB operations use file_id instead of owner_id filtering
-         - Operations work on shared files when user has permission
+      1. ✅ NO LEGACY ENDPOINTS
+         - Verified: No /api/files/share endpoint
+         - All sharing through /api/shares (PermissionManager)
       
-      2. ✓ Integrated PermissionManager throughout
-         - All operations check permissions via PermissionManager
-         - No direct SQL for permission checks
-         - Consistent permission enforcement
+      2. ✅ ACL FULLY WIRED
+         - user_groups passed to ALL file operations
+         - Extracted from JWT token: current_user.get("groups", [])
+         - PermissionManager receives groups for all checks
       
-      3. ✓ Fixed file listing to show shared files
-         - list_directory() returns BOTH owned and shared files
-         - Queries file_permissions table for shared items
-         - AD group-based shares included
-         - user_groups passed from JWT
+      3. ✅ SHARED FILES IN LISTINGS
+         - list_directory() returns owned + shared files
+         - Handles shared folders (checks permission, no 404)
+         - Uses DISTINCT ON to prevent duplicates
       
-      4. ✓ AD group permissions wired everywhere
-         - user_groups extracted from JWT token
-         - Passed to ALL permission checks
-         - Group-based sharing fully functional
+      4. ✅ NO OWNER-ONLY RESTRICTIONS
+         - _get_file_by_path_any_owner() finds any file
+         - Permission checked BEFORE operation
+         - DB operations use file_id (not owner_id filters)
+         - Non-owner with FULL can delete
       
-      5. ✓ Enhanced audit logging
-         - SHARE: includes target, permission level
-         - UNSHARE: includes target being removed
-         - Details field populated
+      5. ✅ FILESYSTEM BEHAVIOR CLARIFIED
+         - Physical files stay in owner's storage
+         - Shared files accessed via owner's path
+         - Path resolution automatic via owner_username
+         - Documented in file_operations.py header
       
-      6. ✓ Folder permissions documented
-         - PERMISSIONS.md created
-         - NO INHERITANCE in v1 (by design)
-         - Each file/folder requires explicit share
-         - Clear rationale provided
+      DOCUMENTATION CREATED:
+      - ACL_INTEGRATION_SUMMARY.md (complete reference)
+      - PERMISSIONS.md (permission system details)
       
-      READY FOR COMPREHENSIVE TESTING:
-      - Share file with user → verify appears in their listing
-      - Share folder with AD group → verify all members see it
-      - Test permission levels: read, write, full
-      - Non-owner with FULL can delete
-      - Non-owner with WRITE can rename/move
-      - Non-owner with READ can download/copy only
-      - Shared files resolve to correct owner's storage
-      - Audit logs show all operations
+      READY FOR FINAL VERIFICATION AND REVIEW
   - agent: "testing"
     message: |
       🔒 BACKEND TESTING COMPLETE - ALL SYSTEMS WORKING ✅
