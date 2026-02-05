@@ -263,35 +263,34 @@ class FinalACLVerifier:
                 return False
             
             # Verify that shared files maintain owner's path structure
-            if shared_file_info:
-                # Get the first shared file info
-                share_info = shared_file_info[0]
+            # Check the first share (Alice -> Bob)
+            alice_to_bob = None
+            for share in shared_file_info:
+                if share['owner_username'] == 'alice' and share['shared_with_username'] == 'bob':
+                    alice_to_bob = share
+                    break
+            
+            if alice_to_bob:
+                self.log_test("Filesystem Behavior", True, 
+                             f"Shared file resolves to owner's path: {alice_to_bob['path']}")
                 
-                if share_info['owner_username'] == 'alice':
-                    self.log_test("Filesystem Behavior", True, 
-                                 f"Shared file resolves to owner's path: {share_info['path']}")
-                    
-                    # Additional check: verify no files created in recipient's storage
-                    cursor.execute(
-                        """
-                        SELECT COUNT(*) as count FROM files 
-                        WHERE owner_id = %s AND path LIKE '/reports/%'
-                        """,
-                        (share_info['shared_with_user_id'],)
-                    )
-                    bob_reports = cursor.fetchone()['count']
-                    
-                    if bob_reports == 0:
-                        self.log_test("Filesystem Behavior - No Recipient Files", True, 
-                                     "No files created in recipient's storage")
-                        return True
-                    else:
-                        self.log_test("Filesystem Behavior - No Recipient Files", False, 
-                                     f"Found {bob_reports} files in Bob's reports folder")
-                        return False
+                # Additional check: verify no files created in recipient's storage
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) as count FROM files 
+                    WHERE owner_id = %s AND path LIKE '/reports/%'
+                    """,
+                    (alice_to_bob['shared_with_user_id'],)
+                )
+                bob_reports = cursor.fetchone()['count']
+                
+                if bob_reports == 0:
+                    self.log_test("Filesystem Behavior - No Recipient Files", True, 
+                                 "No files created in recipient's storage")
+                    return True
                 else:
-                    self.log_test("Filesystem Behavior", False, 
-                                 f"Unexpected owner: {share_info['owner_username']}")
+                    self.log_test("Filesystem Behavior - No Recipient Files", False, 
+                                 f"Found {bob_reports} files in Bob's reports folder")
                     return False
             else:
                 self.log_test("Filesystem Behavior", False, 
