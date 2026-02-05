@@ -226,27 +226,38 @@ async def download_file(
     path: str = Query(..., description="File path"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Download a file"""
+    """Download a file (requires READ permission)"""
     from fastapi.responses import FileResponse
     
     user_id = get_db_user_id(current_user["username"])
     username = current_user["username"]
+    user_groups = current_user.get("groups", [])
     
-    # Check permission
+    # Get file info - try owned first, then any file
     file_info = file_manager._get_file_id_and_owner(path, username)
+    if not file_info:
+        # Not owned, check if it's a shared file
+        file_info = file_manager._get_file_by_path_any_owner(path)
+    
     if file_info:
+        # Check permission (need READ to download)
         file_manager._check_permission(
             file_id=file_info['id'],
             user_id=user_id,
             required_permission=PermissionLevel.READ,
-            user_groups=current_user.get("groups", []),
+            user_groups=user_groups,
         )
+        
+        # Get actual owner's username for file path
+        owner_username = file_info['owner_username']
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
     
-    # Get absolute path
-    abs_path = file_manager._get_absolute_path(username, path)
+    # Get absolute path using owner's username
+    abs_path = file_manager._get_absolute_path(owner_username, path)
     
     if not abs_path.exists() or abs_path.is_dir():
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="File not found or is a directory")
     
     log_audit(user_id, "DOWNLOAD", path)
     
