@@ -251,10 +251,21 @@ class FileManager:
         dest_parent: str,
         user_id: int,
         username: str,
+        user_groups: List[str] = None
     ) -> Dict:
         source_path = self._normalize_path(source_path)
         dest_parent = self._normalize_path(dest_parent)
 
+        # Check permission on source file
+        file_info = self._get_file_id_and_owner(source_path, username)
+        if file_info:
+            self._check_permission(
+                file_id=file_info['id'],
+                user_id=user_id,
+                required_permission=PermissionLevel.WRITE,
+                user_groups=user_groups
+            )
+        
         src_abs = self._get_absolute_path(username, source_path)
         dest_path = f"{dest_parent}/{src_abs.name}"
         dest_abs = self._get_absolute_path(username, dest_path)
