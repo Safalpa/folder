@@ -179,20 +179,46 @@ class FileManager:
         """
         List files in directory
         Returns both owned files AND files shared with the user
+        
+        Note: For shared folders, the physical files exist in the owner's storage,
+        but they appear in the user's listing via ACL permissions.
         """
         path = self._normalize_path(path)
         user_groups = user_groups or []
 
-        # Ensure folder exists on disk (for owned files)
+        # Check if this is user's own folder
         abs_path = self._get_absolute_path(username, path)
-        if not abs_path.exists():
-            raise HTTPException(status_code=404, detail="Directory not found")
+        is_own_folder = abs_path.exists()
+        
+        # If not own folder, check if it's a shared folder we have access to
+        if not is_own_folder:
+            # Check if we have permission to any folder at this path
+            with postgres.get_cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT f.id, f.owner_id, u.username as owner_username
+                    FROM files f
+                    JOIN users u ON f.owner_id = u.id
+                    JOIN file_permissions fp ON f.id = fp.file_id
+                    WHERE f.path = %s AND f.is_folder = TRUE
+                      AND (
+                        fp.shared_with_user_id = %s
+                        OR (fp.shared_with_group = ANY(%s) AND %s)
+                      )
+                    LIMIT 1
+                    """,
+                    (path, user_id, user_groups, len(user_groups) > 0)
+                )
+                shared_folder = cursor.fetchone()
+                
+                if not shared_folder:
+                    raise HTTPException(status_code=404, detail="Directory not found")
 
         with postgres.get_cursor() as cursor:
-            # Get owned files
+            # Get owned files in this path
             cursor.execute(
                 """
-                SELECT f.*, u.username as owner_username
+                SELECT f.*, u.username as owner_username, NULL as shared_permission
                 FROM files f
                 JOIN users u ON f.owner_id = u.id
                 WHERE f.parent_path = %s AND f.owner_id = %s
@@ -202,11 +228,10 @@ class FileManager:
             )
             owned_files = cursor.fetchall()
             
-            # Get shared files in this directory
-            # Files shared with user directly or via groups
+            # Get shared files in this directory (direct user OR group permissions)
             cursor.execute(
                 """
-                SELECT DISTINCT f.*, u.username as owner_username, 
+                SELECT DISTINCT ON (f.id) f.*, u.username as owner_username, 
                        fp.permission_level as shared_permission
                 FROM files f
                 JOIN users u ON f.owner_id = u.id
@@ -217,7 +242,7 @@ class FileManager:
                     fp.shared_with_user_id = %s
                     OR (fp.shared_with_group = ANY(%s) AND %s)
                   )
-                ORDER BY f.is_folder DESC, f.filename ASC
+                ORDER BY f.id, f.is_folder DESC, f.filename ASC
                 """,
                 (path, user_id, user_id, user_groups, len(user_groups) > 0),
             )
