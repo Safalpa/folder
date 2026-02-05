@@ -160,7 +160,8 @@ const FileExplorerPage = () => {
     }
 
     try {
-      await api.delete(`/files/delete?path=${encodeURIComponent(file.file_path)}`);
+      // Backend uses /api/files?path= for DELETE
+      await api.delete(`/files?path=${encodeURIComponent(file.path)}`);
       toast.success('Deleted successfully');
       loadFiles(currentPath);
     } catch (error) {
