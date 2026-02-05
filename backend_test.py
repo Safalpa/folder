@@ -1033,6 +1033,10 @@ class SecureVaultTester:
             critical_failures.append("Shared files not visible to users")
         if not permissions_ok:
             critical_failures.append("Permission enforcement failed")
+        if not edge_cases_ok:
+            critical_failures.append("Edge cases and path resolution failed")
+        if not db_ops_ok:
+            critical_failures.append("Database operations without owner filters failed")
         
         if critical_failures:
             print()
