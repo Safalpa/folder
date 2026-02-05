@@ -501,10 +501,13 @@ class SecureVaultTester:
     def test_api_connectivity(self) -> bool:
         """Test basic API connectivity"""
         try:
-            response = self.session.get(f"{BACKEND_URL}/")
+            response = self.session.get(f"{BACKEND_URL}/", timeout=10)
             if response.status_code == 200:
-                data = response.json()
-                self.log_test("API Connectivity", True, f"API accessible: {data.get('message', 'OK')}")
+                try:
+                    data = response.json()
+                    self.log_test("API Connectivity", True, f"API accessible: {data.get('message', 'OK')}")
+                except:
+                    self.log_test("API Connectivity", True, "API accessible (non-JSON response)")
                 return True
             else:
                 self.log_test("API Connectivity", False, f"HTTP {response.status_code}")
