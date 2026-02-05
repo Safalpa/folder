@@ -81,7 +81,7 @@ const FileExplorerPage = () => {
 
   const handleDownload = async (file) => {
     try {
-      const response = await api.get(`/files/download?path=${encodeURIComponent(file.file_path)}`, {
+      const response = await api.get(`/files/download?path=${encodeURIComponent(file.path)}`, {
         responseType: 'blob',
       });
       
