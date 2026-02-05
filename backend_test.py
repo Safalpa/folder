@@ -770,7 +770,108 @@ class SecureVaultTester:
             self.log_test("API Documentation", False, f"Error: {str(e)}")
             return False
     
-    def run_all_tests(self) -> Dict:
+    def run_comprehensive_acl_tests(self) -> Dict:
+        """Run comprehensive ACL integration tests"""
+        print("🔒 Secure Vault File Manager - COMPREHENSIVE ACL INTEGRATION TESTING")
+        print("=" * 80)
+        print(f"Testing backend at: {BACKEND_URL}")
+        print(f"Database: PostgreSQL at localhost:5432/securevault")
+        print()
+        
+        # Database setup tests
+        print("🗄️  DATABASE SETUP TESTS")
+        print("-" * 40)
+        db_ok = self.connect_db()
+        schema_ok = self.test_database_schema_integrity() if db_ok else False
+        users_ok = self.create_test_users() if db_ok else False
+        files_ok = self.create_test_files() if db_ok and users_ok else False
+        
+        print()
+        print("🤝 ACL SHARING TESTS")
+        print("-" * 40)
+        sharing_ok = self.test_file_sharing_acl() if files_ok else False
+        visibility_ok = self.test_shared_file_visibility() if sharing_ok else False
+        permissions_ok = self.test_permission_enforcement() if sharing_ok else False
+        
+        print()
+        print("📊 AUDIT LOGGING TESTS")
+        print("-" * 40)
+        audit_ok = self.test_audit_logging_structure() if db_ok else False
+        
+        print()
+        print("📡 API CONNECTIVITY TESTS")
+        print("-" * 40)
+        api_ok = self.test_api_connectivity()
+        endpoints_ok = self.test_sharing_endpoints_exist()
+        
+        # Summary
+        print()
+        print("📋 COMPREHENSIVE TEST SUMMARY")
+        print("=" * 80)
+        
+        total_tests = len(self.test_results)
+        passed_tests = sum(1 for result in self.test_results if result['success'])
+        failed_tests = total_tests - passed_tests
+        
+        print(f"Total Tests: {total_tests}")
+        print(f"Passed: {passed_tests} ✅")
+        print(f"Failed: {failed_tests} ❌")
+        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        
+        # Critical ACL test results
+        acl_tests = {
+            'Database Schema': schema_ok,
+            'File Sharing ACL': sharing_ok,
+            'Shared File Visibility': visibility_ok,
+            'Permission Enforcement': permissions_ok,
+            'Audit Logging': audit_ok
+        }
+        
+        print()
+        print("🔐 ACL INTEGRATION TEST RESULTS:")
+        for test_name, result in acl_tests.items():
+            status = "✅ PASS" if result else "❌ FAIL"
+            print(f"   {status} {test_name}")
+        
+        # Critical issues
+        critical_failures = []
+        if not db_ok:
+            critical_failures.append("Database connectivity failed")
+        if not schema_ok:
+            critical_failures.append("Database schema issues")
+        if not sharing_ok:
+            critical_failures.append("ACL sharing system not working")
+        if not visibility_ok:
+            critical_failures.append("Shared files not visible to users")
+        if not permissions_ok:
+            critical_failures.append("Permission enforcement failed")
+        
+        if critical_failures:
+            print()
+            print("🚨 CRITICAL ACL ISSUES:")
+            for issue in critical_failures:
+                print(f"   • {issue}")
+        
+        # Success scenarios
+        if all(acl_tests.values()):
+            print()
+            print("🎉 ACL INTEGRATION SUCCESS:")
+            print("   ✓ Shared files appear in non-owner's listing")
+            print("   ✓ Operations work based on permission level")
+            print("   ✓ File paths resolve to correct owner storage")
+            print("   ✓ No owner_id restrictions after permission checks")
+            print("   ✓ AD groups work for permissions")
+            print("   ✓ Comprehensive audit logging")
+        
+        return {
+            'total_tests': total_tests,
+            'passed': passed_tests,
+            'failed': failed_tests,
+            'success_rate': (passed_tests/total_tests)*100,
+            'critical_failures': critical_failures,
+            'acl_tests': acl_tests,
+            'test_results': self.test_results
+        }
         """Run all tests and return summary"""
         print("🔒 Secure Vault File Manager - Backend Test Suite")
         print("=" * 60)
