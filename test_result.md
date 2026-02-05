@@ -216,12 +216,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "ACL/Permission System Implementation"
-    - "File Operations Permission Enforcement"
-    - "Sharing APIs"
-    - "File Download with Permissions"
-    - "Audit Logging Enhancement"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
