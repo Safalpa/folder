@@ -238,6 +238,7 @@ async def rename_file(
         new_name=new_name,
         user_id=user_id,
         username=current_user["username"],
+        user_groups=current_user.get("groups", []),
     )
     log_audit(user_id, "RENAME", old_path)
     return result
@@ -253,6 +254,7 @@ async def delete_file(
         path=path,
         user_id=user_id,
         username=current_user["username"],
+        user_groups=current_user.get("groups", []),
     )
     log_audit(user_id, "DELETE", path)
     return {"status": "deleted"}
@@ -270,6 +272,7 @@ async def move_file(
         dest_parent=dest_parent,
         user_id=user_id,
         username=current_user["username"],
+        user_groups=current_user.get("groups", []),
     )
     log_audit(user_id, "MOVE", source_path)
     return result
@@ -287,9 +290,98 @@ async def copy_file(
         dest_parent=dest_parent,
         user_id=user_id,
         username=current_user["username"],
+        user_groups=current_user.get("groups", []),
     )
     log_audit(user_id, "COPY", source_path)
     return result
+
+# -------------------------------------------------
+# Sharing APIs
+# -------------------------------------------------
+@api_router.post("/shares")
+async def share_file(
+    file_path: str = Body(...),
+    shared_with_username: str = Body(None),
+    shared_with_group: str = Body(None),
+    permission: str = Body("read"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Share a file with a user or AD group"""
+    user_id = get_db_user_id(current_user["username"])
+    
+    # Get file ID
+    file_id = permission_manager.get_file_id_by_path(file_path, user_id)
+    if not file_id:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Create share
+    permission_id = permission_manager.share_file(
+        file_id=file_id,
+        shared_by_user_id=user_id,
+        shared_with_username=shared_with_username,
+        shared_with_group=shared_with_group,
+        permission_level=permission,
+    )
+    
+    # Log audit
+    target = shared_with_username or shared_with_group
+    log_audit(user_id, "SHARE", f"{file_path} with {target} ({permission})")
+    
+    return {"id": permission_id, "status": "shared"}
+
+
+@api_router.delete("/shares/{permission_id}")
+async def unshare_file(
+    permission_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a file share"""
+    user_id = get_db_user_id(current_user["username"])
+    
+    permission_manager.unshare_file(permission_id, user_id)
+    
+    log_audit(user_id, "UNSHARE", f"permission_id={permission_id}")
+    
+    return {"status": "unshared"}
+
+
+@api_router.get("/shares/file")
+async def get_file_shares(
+    file_path: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get all shares for a specific file"""
+    user_id = get_db_user_id(current_user["username"])
+    
+    # Get file ID
+    file_id = permission_manager.get_file_id_by_path(file_path, user_id)
+    if not file_id:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Check if user has permission to view shares (must be owner or have full permission)
+    effective_perm = permission_manager.get_effective_permission(
+        user_id, file_id, current_user.get("groups", [])
+    )
+    if effective_perm != PermissionLevel.FULL:
+        raise HTTPException(status_code=403, detail="Only file owner can view shares")
+    
+    shares = permission_manager.get_file_shares(file_id)
+    return {"shares": shares}
+
+
+@api_router.get("/shares/with-me")
+async def get_shared_with_me(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get all files shared with current user"""
+    user_id = get_db_user_id(current_user["username"])
+    
+    shared_files = permission_manager.get_shared_with_me(
+        user_id=user_id,
+        user_groups=current_user.get("groups", [])
+    )
+    
+    return {"shared_files": shared_files}
 
 # -------------------------------------------------
 # Final
