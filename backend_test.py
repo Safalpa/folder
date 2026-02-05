@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Secure Vault File Manager Backend Test Suite
+COMPREHENSIVE ACL INTEGRATION TESTING
 Tests ACL/sharing system and audit logging functionality
 """
 
@@ -9,12 +10,23 @@ import json
 import os
 import sys
 import time
+import psycopg2
+import psycopg2.extras
 from typing import Dict, Optional, List
 from pathlib import Path
 
-# Configuration
-BACKEND_URL = 'http://localhost:8001'
+# Configuration - Use production URL from frontend/.env
+BACKEND_URL = 'https://audit-log-shares.preview.emergentagent.com'
 API_BASE = f"{BACKEND_URL}/api"
+
+# Database configuration for direct testing
+DB_CONFIG = {
+    'host': 'localhost',
+    'port': 5432,
+    'database': 'securevault',
+    'user': 'securevault',
+    'password': 'securevault_pass'
+}
 
 class SecureVaultTester:
     def __init__(self):
