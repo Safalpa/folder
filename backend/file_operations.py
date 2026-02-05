@@ -174,8 +174,21 @@ class FileManager:
         new_name: str,
         user_id: int,
         username: str,
+        user_groups: List[str] = None
     ) -> Dict:
         old_path = self._normalize_path(old_path)
+        
+        # Get file info and check permission
+        file_info = self._get_file_id_and_owner(old_path, username)
+        if file_info:
+            # File exists, check permission
+            self._check_permission(
+                file_id=file_info['id'],
+                user_id=user_id,
+                required_permission=PermissionLevel.WRITE,
+                user_groups=user_groups
+            )
+        
         abs_old = self._get_absolute_path(username, old_path)
 
         if not abs_old.exists():
