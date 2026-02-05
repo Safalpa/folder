@@ -974,6 +974,12 @@ class SecureVaultTester:
         permissions_ok = self.test_permission_enforcement() if sharing_ok else False
         
         print()
+        print("🔍 EDGE CASES & PATH RESOLUTION TESTS")
+        print("-" * 40)
+        edge_cases_ok = self.test_edge_cases_and_file_path_resolution() if sharing_ok else False
+        db_ops_ok = self.test_database_operations_without_owner_filters() if sharing_ok else False
+        
+        print()
         print("📊 AUDIT LOGGING TESTS")
         print("-" * 40)
         audit_ok = self.test_audit_logging_structure() if db_ok else False
