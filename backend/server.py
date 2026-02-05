@@ -220,6 +220,42 @@ async def upload_file(
     return result
 
 
+@api_router.get("/files/download")
+async def download_file(
+    path: str = Query(..., description="File path"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Download a file"""
+    from fastapi.responses import FileResponse
+    
+    user_id = get_db_user_id(current_user["username"])
+    username = current_user["username"]
+    
+    # Check permission
+    file_info = file_manager._get_file_id_and_owner(path, username)
+    if file_info:
+        file_manager._check_permission(
+            file_id=file_info['id'],
+            user_id=user_id,
+            required_permission=PermissionLevel.READ,
+            user_groups=current_user.get("groups", []),
+        )
+    
+    # Get absolute path
+    abs_path = file_manager._get_absolute_path(username, path)
+    
+    if not abs_path.exists() or abs_path.is_dir():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    log_audit(user_id, "DOWNLOAD", path)
+    
+    return FileResponse(
+        path=str(abs_path),
+        filename=abs_path.name,
+        media_type=file_manager.get_file_type(abs_path)
+    )
+
+
 @api_router.post("/files/folder")
 async def create_folder(
     path: str = Query(..., description="Folder path"),
