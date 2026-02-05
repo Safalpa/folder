@@ -65,8 +65,8 @@ const ShareDialog = ({ isOpen, onClose, file }) => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="read">Read Only</SelectItem>
-                <SelectItem value="read_write">Read & Write</SelectItem>
-                <SelectItem value="full_control">Full Control</SelectItem>
+                <SelectItem value="write">Read & Write</SelectItem>
+                <SelectItem value="full">Full Control</SelectItem>
               </SelectContent>
             </Select>
           </div>
