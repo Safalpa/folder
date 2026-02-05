@@ -856,9 +856,9 @@ class SecureVaultTester:
         }
 
 def main():
-    """Main test execution"""
+    """Main test execution for comprehensive ACL testing"""
     tester = SecureVaultTester()
-    results = tester.run_all_tests()
+    results = tester.run_comprehensive_acl_tests()
     
     # Exit with appropriate code
     if results['critical_failures']:
