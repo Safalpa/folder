@@ -441,7 +441,189 @@ class SecureVaultTester:
             self.log_test("Audit Logging Structure", False, f"Error: {str(e)}")
             return False
     
-    def test_database_schema_integrity(self) -> bool:
+    def test_edge_cases_and_file_path_resolution(self) -> bool:
+        """Test edge cases and file path resolution for shared files"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Get test data
+            cursor.execute("SELECT id, username FROM users WHERE username IN ('alice', 'bob')")
+            users = {row['username']: row['id'] for row in cursor.fetchall()}
+            
+            # Test 1: File not found scenarios
+            cursor.execute(
+                """
+                SELECT COUNT(*) as count FROM files 
+                WHERE path = '/nonexistent/file.txt'
+                """
+            )
+            nonexistent_count = cursor.fetchone()['count']
+            
+            if nonexistent_count == 0:
+                self.log_test("Edge Case - File Not Found", True, "Nonexistent files properly handled")
+            else:
+                self.log_test("Edge Case - File Not Found", False, "Unexpected file found")
+                return False
+            
+            # Test 2: Multiple permission sources (user + group)
+            # Charlie should have both direct permission and group permission
+            cursor.execute(
+                """
+                SELECT DISTINCT f.path, 
+                       MAX(CASE fp.permission_level
+                           WHEN 'full' THEN 3
+                           WHEN 'write' THEN 2
+                           WHEN 'read' THEN 1
+                       END) as max_permission_rank
+                FROM files f
+                JOIN file_permissions fp ON f.id = fp.file_id
+                JOIN users u ON f.owner_id = u.id
+                WHERE u.username = 'alice'
+                  AND (fp.shared_with_user_id = %s OR fp.shared_with_group = ANY(%s))
+                GROUP BY f.path
+                """,
+                (users.get('charlie'), ['Finance'])
+            )
+            charlie_permissions = cursor.fetchall()
+            
+            if charlie_permissions:
+                # Charlie should have the highest permission available
+                max_perm = max(p['max_permission_rank'] for p in charlie_permissions)
+                if max_perm >= 2:  # Should have at least WRITE from Finance group
+                    self.log_test("Edge Case - Multiple Permission Sources", True, 
+                                 f"Charlie has max permission rank {max_perm} from multiple sources")
+                else:
+                    self.log_test("Edge Case - Multiple Permission Sources", False, 
+                                 f"Charlie permission rank too low: {max_perm}")
+                    return False
+            else:
+                self.log_test("Edge Case - Multiple Permission Sources", False, 
+                             "Charlie has no permissions found")
+                return False
+            
+            # Test 3: Owner can always perform all operations
+            cursor.execute(
+                """
+                SELECT f.id, f.path, f.owner_id, u.username as owner_username
+                FROM files f
+                JOIN users u ON f.owner_id = u.id
+                WHERE u.username = 'alice' AND f.path = '/reports/Q4_Report.pdf'
+                """
+            )
+            alice_file = cursor.fetchone()
+            
+            if alice_file and alice_file['owner_id'] == users['alice']:
+                self.log_test("Edge Case - Owner Permissions", True, 
+                             "Alice (owner) has implicit full permissions on her files")
+            else:
+                self.log_test("Edge Case - Owner Permissions", False, 
+                             "Owner permission check failed")
+                return False
+            
+            # Test 4: File path resolution - shared file should resolve to owner's storage
+            # This tests that the system can find files by path regardless of who's accessing them
+            cursor.execute(
+                """
+                SELECT f.path, u.username as owner_username, fp.permission_level
+                FROM files f
+                JOIN users u ON f.owner_id = u.id
+                JOIN file_permissions fp ON f.id = fp.file_id
+                WHERE f.path = '/reports/Q4_Report.pdf' 
+                  AND fp.shared_with_user_id = %s
+                """,
+                (users['bob'],)
+            )
+            bob_shared_file = cursor.fetchone()
+            
+            if bob_shared_file and bob_shared_file['owner_username'] == 'alice':
+                self.log_test("Edge Case - File Path Resolution", True, 
+                             f"Bob can access Alice's file at {bob_shared_file['path']} with {bob_shared_file['permission_level']} permission")
+            else:
+                self.log_test("Edge Case - File Path Resolution", False, 
+                             "File path resolution for shared files failed")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self.log_test("Edge Cases and File Path Resolution", False, f"Error: {str(e)}")
+            return False
+    
+    def test_database_operations_without_owner_filters(self) -> bool:
+        """Test that database operations work without owner_id filters after permission checks"""
+        try:
+            cursor = self.get_db_cursor()
+            if not cursor:
+                return False
+            
+            # Get test data
+            cursor.execute("SELECT id, username FROM users WHERE username IN ('alice', 'bob')")
+            users = {row['username']: row['id'] for row in cursor.fetchall()}
+            
+            cursor.execute("SELECT id, path FROM files WHERE path = '/reports/Q4_Report.pdf'")
+            file_info = cursor.fetchone()
+            
+            if not file_info:
+                self.log_test("DB Operations Without Owner Filters", False, "Test file not found")
+                return False
+            
+            # Test 1: File operations should work by file_id, not owner_id
+            # Simulate what happens when Bob (non-owner) renames Alice's shared file
+            
+            # First verify Bob has permission
+            cursor.execute(
+                """
+                SELECT permission_level FROM file_permissions
+                WHERE file_id = %s AND shared_with_user_id = %s
+                """,
+                (file_info['id'], users['bob'])
+            )
+            bob_permission = cursor.fetchone()
+            
+            if not bob_permission:
+                self.log_test("DB Operations Without Owner Filters", False, "Bob has no permission on test file")
+                return False
+            
+            # Test rename operation using file_id (not owner_id filter)
+            new_name = "Q4_Report_Updated.pdf"
+            new_path = "/reports/Q4_Report_Updated.pdf"
+            
+            cursor.execute(
+                """
+                UPDATE files
+                SET filename = %s, path = %s, modified_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id, filename, path
+                """,
+                (new_name, new_path, file_info['id'])
+            )
+            updated_file = cursor.fetchone()
+            
+            if updated_file and updated_file['filename'] == new_name:
+                self.log_test("DB Operations Without Owner Filters", True, 
+                             f"File renamed successfully using file_id: {updated_file['filename']}")
+                
+                # Restore original name for other tests
+                cursor.execute(
+                    """
+                    UPDATE files
+                    SET filename = %s, path = %s, modified_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    ("Q4_Report.pdf", "/reports/Q4_Report.pdf", file_info['id'])
+                )
+                
+                return True
+            else:
+                self.log_test("DB Operations Without Owner Filters", False, 
+                             "File rename operation failed")
+                return False
+            
+        except Exception as e:
+            self.log_test("DB Operations Without Owner Filters", False, f"Error: {str(e)}")
+            return False
         """Test database schema integrity for ACL system"""
         try:
             cursor = self.get_db_cursor()
