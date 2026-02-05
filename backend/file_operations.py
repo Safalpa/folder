@@ -70,10 +70,12 @@ class FileManager:
             )
         return True
 
-    def _get_file_id_and_owner(self, path: str, username: str) -> Optional[Dict]:
-        """Get file ID and owner info from database"""
+    def _get_file_id_and_owner(self, path: str, owner_username: str) -> Optional[Dict]:
+        """
+        Get file ID and owner info from database
+        Searches for file by path within the owner's namespace
+        """
         with postgres.get_cursor() as cursor:
-            # First try to find by exact path match
             cursor.execute(
                 """
                 SELECT f.id, f.owner_id, u.username as owner_username
@@ -81,7 +83,26 @@ class FileManager:
                 JOIN users u ON f.owner_id = u.id
                 WHERE f.path = %s AND u.username = %s
                 """,
-                (path, username)
+                (path, owner_username)
+            )
+            row = cursor.fetchone()
+            return row if row else None
+    
+    def _get_file_by_path_any_owner(self, path: str) -> Optional[Dict]:
+        """
+        Get file by path regardless of owner
+        Used when accessing shared files
+        """
+        with postgres.get_cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT f.id, f.owner_id, f.path, f.filename, f.is_folder,
+                       u.username as owner_username
+                FROM files f
+                JOIN users u ON f.owner_id = u.id
+                WHERE f.path = %s
+                """,
+                (path,)
             )
             row = cursor.fetchone()
             return row if row else None
