@@ -175,14 +175,15 @@ class SecureVaultTester:
                 self.log_test("ACL File Sharing", False, "Test data not available")
                 return False
             
+            # Clear existing permissions for clean test
+            cursor.execute("DELETE FROM file_permissions WHERE file_id IN %s", 
+                          (tuple(f['id'] for f in files.values()),))
+            
             # Test 1: Alice shares Q4_Report.pdf with Bob (READ permission)
             cursor.execute(
                 """
                 INSERT INTO file_permissions (file_id, shared_by_user_id, shared_with_user_id, permission_level)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (file_id, shared_with_user_id) DO UPDATE SET
-                    permission_level = EXCLUDED.permission_level,
-                    created_at = CURRENT_TIMESTAMP
                 """,
                 (files['/reports/Q4_Report.pdf']['id'], users['alice'], users['bob'], 'read')
             )
@@ -192,9 +193,6 @@ class SecureVaultTester:
                 """
                 INSERT INTO file_permissions (file_id, shared_by_user_id, shared_with_group, permission_level)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (file_id, shared_with_group) DO UPDATE SET
-                    permission_level = EXCLUDED.permission_level,
-                    created_at = CURRENT_TIMESTAMP
                 """,
                 (files['/finance/Budget.xlsx']['id'], users['alice'], 'Finance', 'write')
             )
@@ -204,9 +202,6 @@ class SecureVaultTester:
                 """
                 INSERT INTO file_permissions (file_id, shared_by_user_id, shared_with_user_id, permission_level)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (file_id, shared_with_user_id) DO UPDATE SET
-                    permission_level = EXCLUDED.permission_level,
-                    created_at = CURRENT_TIMESTAMP
                 """,
                 (files['/reports/Q4_Report.pdf']['id'], users['alice'], users['charlie'], 'full')
             )
