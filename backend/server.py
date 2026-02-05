@@ -199,6 +199,7 @@ async def list_files(
         path=path,
         user_id=user_id,
         username=username,
+        user_groups=current_user.get("groups", []),
     )
 
 
